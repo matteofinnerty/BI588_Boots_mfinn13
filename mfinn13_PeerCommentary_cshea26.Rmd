@@ -1,0 +1,138 @@
+---
+title: "mfinn13_originalHomeworkCode_05"
+output: html_document
+date: "2025-04-23"
+---
+
+## Homework 5: Boots for Days
+**Bootstrapping Standard Errors and CIs for Linear Models.**
+When we initially discussed the central limit theorem and confidence intervals, we showed how we could use bootstrapping to estimate standard errors and confidence intervals around certain parameter values, like the mean. Using bootstrapping, we could also do the same for estimating standard errors and CIs around regression parameters, such as 𝛽
+ coefficients.
+
+[1] Using the “KamilarAndCooperData.csv” dataset, run a linear regression looking at log(HomeRange_km2) in relation to log(Body_mass_female_mean) and report your 𝛽coeffiecients (slope and intercept).
+
+[2] Then, use bootstrapping to sample from your data 1000 times with replacement, each time fitting the same model and calculating the same coefficients. This generates a sampling distribution for each 𝛽coefficient.
+
+Estimate the standard error for each of your 𝛽 coefficients as the standard deviation of the sampling distribution from your bootstrap and determine the 95% CI for each of your 𝛽coefficients based on the appropriate quantiles from your sampling distribution.
+
+How does the former compare to the SE estimated from your entire dataset using the formula for standard error implemented in lm()?
+
+How does the latter compare to the 95% CI estimated from your entire dataset?
+
+## Challenge 1
+```{r}
+#importing data
+file <- ("https://raw.githubusercontent.com/fuzzyatelin/fuzzyatelin.github.io/refs/heads/master/AN588_Fall23/KamilarAndCooperData.csv")
+data <- read.csv(file, header = T, sep = ",")
+
+#fitting linear regression + summarizing
+lRange_vs_lFemBodyMass <- lm(data = data, log(HomeRange_km2) ~ log(Body_mass_female_mean) ) 
+summary(lRange_vs_lFemBodyMass) 
+
+#printing coefficients
+paste("The slope is ", lRange_vs_lFemBodyMass$coefficients[2], " and the y-intercept is ", lRange_vs_lFemBodyMass$coefficients[1], ".", sep = "") 
+
+```
+> CARLY: This is great so far, our values for the slope and intercept are the same. I really like how you pasted the slope into a sentence, I would have never thought to do this!
+
+## Challenge 2
+```{r}
+setBeta0 <- NULL #dummy variable which will hold all the intercepts
+setBeta1 <- NULL #dummy variable which will hold all the slopes
+setSamples <- NULL # dummy data frame which will hold the 1000 samples of size 30 (The problem doesn't specify a sample size to take)
+setLMs <- NULL #dummy variable which will hold the LMs temporarily, so that I can extract the beta-0 and beta-1 values
+
+#randomly samples 30 rows with replacement from the kamilar and cooper data 1000 times.
+set.seed(1) #so that the numbers stay constant
+for (i in 1:1000){
+  setSamples[[i]] <- data[sample(nrow(data), size = 30, replace = T),  ] 
+}
+           
+#runs a linear regression using data frame i inside of setSamples (which contains 1000 data frames, each with 30 rows)
+for (i in 1:1000){
+  setLMs[[i]] <- lm(data = setSamples[[i]], log(HomeRange_km2) ~ log(Body_mass_female_mean))
+  coef_i <- coef(setLMs[[i]]) #carly: minor change i made here to get rid of error message (coef lets you extract coefficients)
+  setBeta0[i] <- coef_i[1] #carly: here set beta1 and beta0 are numeric vectors and so i dont think you need as.numeric anymore going forward
+  setBeta1[i] <- coef_i[2]
+}
+
+#visualization of distribution of intercepts and slopes (not required, just to see) # carly: good idea!
+par(mfrow = c(1,2))
+hist(setBeta0) #approx normal #carly: here i removed the as.numeric - feel free to put it back if you want to - there was just no change 
+hist(setBeta1) #approx normal
+
+#note: it was throwing an error, telling me x must be numeric, before I included as.numeric() for the histograms. All of the values within setBeta0 and setBeta1 are numeric -- I checked with str() so I don't fully understand why. 
+
+
+
+#Solving for standard error and confidence intervals 
+
+#Beta-0 - standard error
+beta0_variance <- var(as.numeric(setBeta0)) #calculating variance for beta 0
+beta0_stdev <- sqrt(beta0_variance) #calculating standard deviation for beta 0
+beta0_sterr <- beta0_stdev/sqrt(1000) #calculating standard error for beta 0 (sample size is 1000)
+paste("The standard error for beta-0 is ", beta0_sterr, sep = "") #printing result
+
+#Beta-1 - standard error
+beta1_variance <- var(as.numeric(setBeta1)) #calculating variance for beta 1
+beta1_stdev <- sqrt(beta1_variance) #calculating standard deviation for beta 1
+beta1_sterr <- beta1_stdev/sqrt(1000) #calculating standard error for beta 1 (sample size is 1000)
+paste("The standard error for beta-1 is ", beta1_sterr, sep = "") #printing result
+
+#Beta-0 - 95% CI
+mean_beta0 <-mean(as.numeric(setBeta0))
+CIlwr_beta0 <- mean_beta0 - qnorm(0.975)*beta0_sterr
+CIupr_beta0 <- mean_beta0 + qnorm(0.975)*beta0_sterr
+CI_beta0 <- paste(CIlwr_beta0, CIupr_beta0, sep = ", ")
+paste("The 95% Confidence Interval for beta-0 is (", CI_beta0, ").", sep = "")
+
+#Beta-1 - 95% CI
+mean_beta1 <-mean(as.numeric(setBeta1))
+CIlwr_beta1 <- mean_beta1 - qnorm(0.975)*beta1_sterr
+CIupr_beta1 <- mean_beta1 + qnorm(0.975)*beta1_sterr
+CI_beta1 <- paste(CIlwr_beta1, CIupr_beta1, sep = ", ")
+paste("The 95% Confidence Interval for beta-0 is (", CI_beta1, ").", sep = "")
+
+
+#Comparing the results from the linear regression (whole dataset) vs. bootstrapping (1000 samples of size 30)
+
+summary(lRange_vs_lFemBodyMass)
+
+mean(as.numeric(setBeta0))
+mean(as.numeric(setBeta1))
+
+#estimates of beta-0 and beta-1 
+paste("The mean beta-0 from bootstrapping was -9.57 while the mean beta-1 from bootstrapping was 1.05. This is very similar to the coefficients from the lm which were -9.44 and 1.03 respectively.")
+
+#estimates of standard error 
+paste("The standard error from the lm for beta-0 was 0.673 and for beta-1 was 0.085. This is surprisingly not very similar to the valueus obtained via boostrapping, which were 0.061 and 0.008. I may have blundered somewhere.") 
+
+
+#estimates of 95% confidence interval 
+#the lm() function doesn't output a 95% confidence interval
+
+```
+> Carly: I think the part above where you noted that the beta-0 values are very different from each other could be due to the fact that the standard deviation of the bootstrap coefficient is just the bootstrapped standard error (you don't need to divide it by sqrt(1000)). This might be a better way to calculate beta0: beta0_sterr/ <- beta0_stdev. 
+> Carly: Also in terms of calculating CI's, I know that bootstrapping doesn't assume normality so perhaps using quantile instead of qnorm would be a better approach?  
+> I am a little confused why you have n=30 as a sample size in Challenge 2 - instead would saying size = nrow(data) work/make this part easier? I like how you were able to set those dummy variables, it seems more efficient than how I tried to go about this.  
+
+>Carly: Also, I am a tad scared of all of the warning resposnes that you get when you knit/run this function. I am not entirely sure why but its just repeats of this: "Warning in setLMs[i] <- lm(data = setSamples[[i]], log(HomeRange_km2) ~ :
+## number of items to replace is not a multiple of replacement length"
+- Wait nvmd I fixed it, feel free in the chunk of code for challenge 2 to see where i modified things (i used #carly so you can just search for it)
+
+
+## Challenges
+1. getting samples from the data set. the goal is to sample 30 rows. GPT suggested I use two sets of brackets around i in my for loop, which I kind of understand but not fully. But it works! Wait I get it now. I am taking 30 rows from the original data set and was trying to put them into one row. But I want to figure out a way to put the first 30 samples into the first 30 rows of my sample dataset, then take the next 30 and put them into rows 31-60 and so on. I think that's too complicated though. So what I'm really creating is a dataset that contains 1000 datasets which each have 30 rows.
+> Carly: You raise a really good point with this question/comment. I was confused also whether or not we needed to set a sample size. Personally in my code I didn't. I think it depends on like what the question itself is looking at. If we want to mimic coefficients that vary across new samples of the same size - we can use nrow(data) but if we wanted variability or to look at a smaller subset of data we would then use 30. I'm not entirely sure which is preferred with bootstrapping, but personally I preferred using no sample size and just having nrow(data) because then the bootstrapped samples I created are the same size as my original (i think?). Definitely up to interpretation here. 
+
+2. when i was trying to run an lm on the set of samples that i drew form the dataset, it couldn't find the variables. It turns out it was another issue of using 1 pair of brackets versus 2. If I understand correctly, the setLMs is another kind of 3-D data frame, where it itself contains data frames. 
+> Carly: I am not entirely sure but I think you're correct-two sets of brackets has the ability to pull the object itself out of an index (i) and then one set of brackets would return a list. I think that the reason this ultimately works is because we are, as you said, working in the lm object and want to pull from within that.
+
+3. I also ran into a similar issue with getting the coefficients from the linear regressions from within the setLMs object. It was yet again an issue of using two brackets. But then it also wouldn't let me use the $coefficients to access the beta-0 and beta-1, but I just used more brackets to access them. 
+>Carly: Yep same idea as the theory you had for Q2.
+
+4. One thing I found helpful was making the for loops only run 1:10 at first so that I could figure out issues before setting it to 1000. I first tried at 1000 and the output was super long and difficult to see what the actual issues were. 
+5. Not a challenge but a question: the lm() function doesn't output a confidence interval, so I wasn't sure what we were meant to compare to our bootstrapped CIs. 
+> Carly: The way that I went about comparing my bootstrapped CIs was by using the function confint() on my lm model. This gave me the 95% CIs that I could then compare to the bootstrapped CIs. Summary lm() here would only give u SE which I agree isn't the most helpful. 
+
+>Carly: Overall great work! Our values for the most part were consistent and your figures look great. Feel free to LMK if you have any further questions about my comments/suggestions! 
