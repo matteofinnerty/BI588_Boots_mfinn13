@@ -1,0 +1,114 @@
+---
+title: "mfinn13_FinalHomeworkCode_05"
+output: html_document
+date: "2025-04-27"
+---
+
+## Homework 5: Boots for Days
+**Bootstrapping Standard Errors and CIs for Linear Models.**
+When we initially discussed the central limit theorem and confidence intervals, we showed how we could use bootstrapping to estimate standard errors and confidence intervals around certain parameter values, like the mean. Using bootstrapping, we could also do the same for estimating standard errors and CIs around regression parameters, such as 𝛽
+ coefficients.
+
+[1] Using the “KamilarAndCooperData.csv” dataset, run a linear regression looking at log(HomeRange_km2) in relation to log(Body_mass_female_mean) and report your 𝛽coeffiecients (slope and intercept).
+
+[2] Then, use bootstrapping to sample from your data 1000 times with replacement, each time fitting the same model and calculating the same coefficients. This generates a sampling distribution for each 𝛽coefficient.
+
+Estimate the standard error for each of your 𝛽 coefficients as the standard deviation of the sampling distribution from your bootstrap and determine the 95% CI for each of your 𝛽coefficients based on the appropriate quantiles from your sampling distribution.
+
+How does the former compare to the SE estimated from your entire dataset using the formula for standard error implemented in lm()?
+
+How does the latter compare to the 95% CI estimated from your entire dataset?
+
+## Challenge 1
+```{r}
+#importing data
+file <- ("https://raw.githubusercontent.com/fuzzyatelin/fuzzyatelin.github.io/refs/heads/master/AN588_Fall23/KamilarAndCooperData.csv")
+data <- read.csv(file, header = T, sep = ",")
+
+#fitting linear regression + summarizing
+lRange_vs_lFemBodyMass <- lm(data = data, log(HomeRange_km2) ~ log(Body_mass_female_mean) ) 
+summary(lRange_vs_lFemBodyMass) 
+
+#printing coefficients
+paste("The slope is ", lRange_vs_lFemBodyMass$coefficients[2], " and the y-intercept is ", lRange_vs_lFemBodyMass$coefficients[1], ".", sep = "") 
+
+```
+
+## Challenge 2
+```{r}
+setBeta0 <- NULL #dummy variable which will hold all the intercepts
+setBeta1 <- NULL #dummy variable which will hold all the slopes
+setSamples <- NULL # dummy data frame which will hold the 1000 samples
+setLMs <- NULL #dummy variable which will hold the LMs temporarily, so that I can extract the beta-0 and beta-1 values
+sampleSize <- nrow(data)
+sampleSize
+
+#randomly samples  rows with replacement from the kamilar and cooper data 1000 times and puts them into a set of samples called setSamples.
+set.seed(1) #so that the numbers stay constant
+for (i in 1:1000){
+  setSamples[[i]] <- data[sample(nrow(data), size = sampleSize, replace = T),  ] 
+}
+           
+#runs a linear regression using data frame i inside of setSamples (which contains 1000 data frames sampled from kamilar and cooper)
+for (i in 1:1000){
+  setLMs[[i]] <- lm(data = setSamples[[i]], log(HomeRange_km2) ~ log(Body_mass_female_mean))
+  coef_i <- coef(setLMs[[i]]) 
+  setBeta0[i] <- coef_i[1] 
+  setBeta1[i] <- coef_i[2]
+}
+
+#visualization of distribution of intercepts and slopes (not required, just to see) 
+par(mfrow = c(1,2))
+hist(setBeta0) #approx normal 
+hist(setBeta1) #approx normal
+
+
+#Solving for standard error and confidence intervals 
+
+#Beta-0 - standard error
+beta0_variance <- var(as.numeric(setBeta0)) #calculating variance for beta 0
+beta0_sterr <- sqrt(beta0_variance) #calculating standard error for beta 0 (which is equal to the standard deviation)
+paste("The standard error for beta-0 is ", beta0_sterr, sep = "") #printing result
+
+#Beta-1 - standard error
+beta1_variance <- var(as.numeric(setBeta1)) #calculating variance for beta 1
+beta1_sterr <- sqrt(beta1_variance) #calculating standard error for beta 1 (which is equal to the standard deviation)
+paste("The standard error for beta-1 is ", beta1_sterr, sep = "") #printing result
+
+#Beta-0 - 95% CI
+mean_beta0 <-mean(as.numeric(setBeta0))
+CIlwr_beta0 <- mean_beta0 - qnorm(0.975)*beta0_sterr
+CIupr_beta0 <- mean_beta0 + qnorm(0.975)*beta0_sterr
+CI_beta0 <- paste(CIlwr_beta0, CIupr_beta0, sep = ", ")
+paste("The 95% Confidence Interval for beta-0 is (", CI_beta0, ").", sep = "")
+
+#Beta-1 - 95% CI
+mean_beta1 <-mean(as.numeric(setBeta1))
+CIlwr_beta1 <- mean_beta1 - qnorm(0.975)*beta1_sterr
+CIupr_beta1 <- mean_beta1 + qnorm(0.975)*beta1_sterr
+CI_beta1 <- paste(CIlwr_beta1, CIupr_beta1, sep = ", ")
+paste("The 95% Confidence Interval for beta-1 is (", CI_beta1, ").", sep = "")
+
+
+#Comparing the results from the linear regression (whole dataset) vs. bootstrapping (1000 samples of size 30)
+
+#estimates of standard error 
+paste("The standard error from the lm for beta-0 was 0.673 and for beta-1 was 0.085. This is pretty similar to the valueus obtained via boostrapping, which were 0.597 and 0.077") 
+
+
+#estimates of 95% confidence interval 
+confint(lRange_vs_lFemBodyMass) #gives a 95% confidence interval for the lm coefficients
+paste("The confidence intervals from the lm were as follows: beta-0 (-10.77, -8.11), beta-1 (0.87, 1.20). The confidence intervals derived from bootstrapping were beta-0 (-10.64, -8.30), and beta-1 (0.89, 1.19). These are very similar.")
+```
+
+## Challenges
+1. getting samples from the data set. the goal is to sample 30 rows. The internet suggests I use two sets of brackets around i in my for loop, which I kind of understand but not fully. But it works! Wait I get it now. I am taking 30 rows from the original data set and was trying to put them into one row. But I want to figure out a way to put the first 30 samples into the first 30 rows of my sample dataset, then take the next 30 and put them into rows 31-60 and so on. I think that's too complicated though. So what I'm really creating is a dataset that contains 1000 datasets which each have 30 rows.
+
+2. when i was trying to run an lm on the set of samples that i drew form the dataset, it couldn't find the variables. It turns out it was another issue of using 1 pair of brackets versus 2. If I understand correctly, the setLMs is another kind of 3-D data frame, where it itself contains data frames. 
+
+3. I also ran into a similar issue with getting the coefficients from the linear regressions from within the setLMs object. It was yet again an issue of using two brackets. But then it also wouldn't let me use the $coefficients to access the beta-0 and beta-1, but I just used more brackets to access them. 
+
+4. One thing I found helpful was making the for loops only run 1:10 at first so that I could figure out issues before setting it to 1000. I first tried at 1000 and the output was super long and difficult to see what the actual issues were. 
+
+5. Not a challenge but a question: the lm() function doesn't output a confidence interval, so I wasn't sure what we were meant to compare to our bootstrapped CIs. 
+
